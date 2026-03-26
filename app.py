@@ -6,49 +6,56 @@ import torchvision.transforms as transforms
 from torchvision.models import resnet18
 import torch.nn as nn
 
-app = Flask(__name__)
+app = Flask(**name**)
 CORS(app)
 
-# ================= LOAD MODEL =================
+# ===== LOAD MODEL =====
+
 model = resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, 4)
+
 model.load_state_dict(torch.load("brain_model.pth", map_location="cpu"))
 model.eval()
 
 classes = ['glioma', 'meningioma', 'no_tumor', 'pituitary']
 
-# ================= TRANSFORM =================
+# ===== TRANSFORM =====
+
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.Grayscale(num_output_channels=3),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
+transforms.Resize((224, 224)),
+transforms.Grayscale(num_output_channels=3),
+transforms.ToTensor(),
+transforms.Normalize(
+mean=[0.485, 0.456, 0.406],
+std=[0.229, 0.224, 0.225]
+)
 ])
 
-# ================= ROUTE =================
+# ===== ROUTE =====
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    file = request.files['image']   # ✅ matches React
+if 'image' not in request.files:
+return jsonify({"error": "No file uploaded"}), 400
 
-    image = Image.open(file).convert('RGB')
-    image = transform(image).unsqueeze(0)
+```
+file = request.files['image']
 
-    with torch.no_grad():
-        outputs = model(image)
-        probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
+image = Image.open(file).convert('RGB')
+image = transform(image).unsqueeze(0)
 
-        confidence, predicted = torch.max(probabilities, 0)
+with torch.no_grad():
+    outputs = model(image)
+    probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
+    confidence, predicted = torch.max(probabilities, 0)
 
-    result = {
-        "disease": classes[predicted.item()],
-        "confidence": round(confidence.item() * 100, 2)
-    }
+return jsonify({
+    "disease": classes[predicted.item()],
+    "confidence": round(confidence.item() * 100, 2)
+})
+```
 
-    return jsonify(result)
+# ===== RUN =====
 
-# ================= RUN =================
-if __name__ == '__main__':
-    app.run(debug=True)
+if **name** == '**main**':
+app.run(host="0.0.0.0", port=5000)
