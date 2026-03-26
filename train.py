@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms, models
+from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
+from torchvision.models import resnet18, ResNet18_Weights
 
 # ================= DEVICE =================
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using Device:", device)
 
-# ================= TRANSFORMS (AUGMENTATION) =================
+# ================= TRANSFORMS =================
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.Grayscale(num_output_channels=3),
@@ -27,7 +29,7 @@ train_data = datasets.ImageFolder('data/train', transform=transform)
 
 train_loader = DataLoader(
     train_data,
-    batch_size=64,
+    batch_size=16,   # reduced for speed
     shuffle=True,
     num_workers=0
 )
@@ -35,11 +37,15 @@ train_loader = DataLoader(
 print("Classes:", train_data.classes)
 
 # ================= MODEL =================
-model = models.resnet18(pretrained=True)
+model = resnet18(weights=ResNet18_Weights.DEFAULT)
 
 # Freeze all layers
 for param in model.parameters():
     param.requires_grad = False
+
+# Unfreeze last block for better learning
+for param in model.layer4.parameters():
+    param.requires_grad = True
 
 # Replace final layer
 model.fc = nn.Linear(model.fc.in_features, 4)
@@ -49,8 +55,7 @@ model = model.to(device)
 # ================= LOSS & OPTIMIZER =================
 criterion = nn.CrossEntropyLoss()
 
-# Train only final layer
-optimizer = optim.Adam(model.fc.parameters(), lr=0.001)
+optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.0001)
 
 # ================= TRAINING =================
 epochs = 12
@@ -58,8 +63,10 @@ epochs = 12
 for epoch in range(epochs):
     model.train()
     running_loss = 0
+    correct = 0
+    total = 0
 
-    for images, labels in train_loader:
+    for i, (images, labels) in enumerate(train_loader):
         images, labels = images.to(device), labels.to(device)
 
         optimizer.zero_grad()
@@ -72,9 +79,23 @@ for epoch in range(epochs):
 
         running_loss += loss.item()
 
-    print(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss:.4f}")
+        # Accuracy calculation
+        _, predicted = torch.max(outputs, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+        # Batch logging
+        if (i + 1) % 10 == 0:
+            print(f"Epoch [{epoch+1}/{epochs}] Step [{i+1}/{len(train_loader)}] Loss: {loss.item():.4f}")
+
+    epoch_loss = running_loss / len(train_loader)
+    accuracy = 100 * correct / total
+
+    print(f"\n✅ Epoch [{epoch+1}/{epochs}] Completed")
+    print(f"Loss: {epoch_loss:.4f} | Accuracy: {accuracy:.2f}%\n")
 
 # ================= SAVE MODEL =================
 torch.save(model.state_dict(), "brain_model.pth")
+torch.save(model, "brain_model_full.pth")
 
-print("\n🔥 Model trained successfully (High Accuracy Version)")
+print("🔥 Model trained successfully!")
