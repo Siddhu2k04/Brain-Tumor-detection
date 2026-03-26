@@ -35,27 +35,32 @@ std=[0.229, 0.224, 0.225]
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
+try:
 if 'image' not in request.files:
 return jsonify({"error": "No file uploaded"}), 400
 
 ```
-file = request.files['image']
+    file = request.files['image']
 
-image = Image.open(file).convert('RGB')
-image = transform(image).unsqueeze(0)
+    image = Image.open(file).convert('RGB')
+    image = transform(image).unsqueeze(0)
 
-with torch.no_grad():
-    outputs = model(image)
-    probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
-    confidence, predicted = torch.max(probabilities, 0)
+    with torch.no_grad():
+        outputs = model(image)
+        probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
+        confidence, predicted = torch.max(probabilities, 0)
 
-return jsonify({
-    "disease": classes[predicted.item()],
-    "confidence": round(confidence.item() * 100, 2)
-})
+    return jsonify({
+        "disease": classes[predicted.item()],
+        "confidence": round(confidence.item() * 100, 2)
+    })
+
+except Exception as e:
+    print("❌ ERROR:", e)
+    return jsonify({"error": str(e)}), 500
 ```
 
 # ===== RUN =====
 
 if **name** == '**main**':
-app.run(host="0.0.0.0", port=5000)
+app.run(host="0.0.0.0", port=5000, debug=True)
